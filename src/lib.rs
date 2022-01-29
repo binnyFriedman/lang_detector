@@ -66,20 +66,13 @@ fn generate_profile(document:String) -> Vec<String> {
     profile_vec.sort_by(|a,b| b.1.cmp(&a.1));
 
     //remove the frequency count from the vector.
-    let mut top_frequent_grams = Vec::new();
-    let mut index:usize = 0;
-    while index < MAX_PROFILE_LEN  && index < profile_vec.len() {
-        top_frequent_grams.push(profile_vec[index].0.clone());
-        index += 1;
-    }
-    top_frequent_grams
-
+    profile_vec.into_iter().take(MAX_PROFILE_LEN).map(|tuple| tuple.0.clone()).collect()
 }
 
 
 pub fn detect(doc:String)->String {
     let profile = generate_profile(doc);
-    let pofile_length = profile.len();
+    let profile_length = profile.len();
     let profiles = get_profiles_from_file();
     let profile_distances = get_min_distances(profile,profiles);
 
@@ -91,7 +84,7 @@ pub fn detect(doc:String)->String {
     }
 
     //most out of place is no match in any profile
-    let most_out_of_place = MAX_DISTANCE * pofile_length;
+    let most_out_of_place = MAX_DISTANCE * profile_length;
 
 
 
