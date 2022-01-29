@@ -1,13 +1,10 @@
-use std::any::Any;
 use std::collections::HashMap;
-use std::cmp::{max, min};
 use std::fs;
-use serde::Deserialize;
 
+const MAX_DISTANCE:usize = 301;
 
-
-fn generate_profile(document:String) -> Vec<(String)> {
-    const MAX_LENGTH:i32 = 1000000;
+fn generate_profile(document:String) -> Vec<String> {
+    const MAX_LENGTH:i32 = 100000;
     const N_GRAM_SIZE:usize = 3;
     const MAX_PROFILE_LEN: usize = 300;
 
@@ -40,11 +37,12 @@ fn generate_profile(document:String) -> Vec<(String)> {
             }
 
             while from_index < end_index as i32 {
-                let mut c = word.chars().nth(from_index as usize).unwrap();
+                let c = word.chars().nth(from_index as usize).unwrap();
                 if !c.is_alphabetic() && from_index != word_length as i32 -1 {
                     continue 'word_itr;
                 }
                 if c.is_alphabetic() {
+                    profile.entry(c.to_string()).and_modify(|x| *x += 1).or_insert(1);
                     word_slice.push(c);
                 }
                 from_index += 1;
@@ -68,18 +66,13 @@ fn generate_profile(document:String) -> Vec<(String)> {
     profile_vec.sort_by(|a,b| b.1.cmp(&a.1));
 
     //remove the frequency count from the vector.
-    let mut profile_vec_no_count = Vec::new();
-    let mut index:usize = 0;
-    while index < MAX_PROFILE_LEN  && index < profile_vec.len() {
-        profile_vec_no_count.push(profile_vec[index].0.clone());
-        index += 1;
-    }
-    profile_vec_no_count
-
+    profile_vec.into_iter().take(MAX_PROFILE_LEN).map(|tuple| tuple.0.clone()).collect()
 }
+
 
 pub fn detect(doc:String)->String {
     let profile = generate_profile(doc);
+    let profile_length = profile.len();
     let profiles = get_profiles_from_file();
     let profile_distances = get_min_distances(profile,profiles);
 
@@ -89,11 +82,22 @@ pub fn detect(doc:String)->String {
             min_profile = (profile,distance);
         }
     }
+
+    //most out of place is no match in any profile
+    let most_out_of_place = MAX_DISTANCE * profile_length;
+
+
+
+    //lets say that we need to be within 10% of the most out of place
+    if min_profile.1 > (most_out_of_place - most_out_of_place / 10) as i32 {
+        return String::from("No match");
+    }
+
+
     min_profile.0
 }
 
 fn get_min_distances(profile: Vec<String>, profiles: HashMap<String, Vec<String>>) -> HashMap<String,i32> {
-    const MAX_DISTANCE:usize = 301;
     let mut profile_distances = HashMap::new();
     for (lang, lang_profile) in profiles {
         let mut distance:i32 = 0;
@@ -136,14 +140,11 @@ fn add_profile_from_path(tag:String){
 }
 
 fn generate_all_languages() {
-    let mut profiles = get_profiles_from_file();
     for entry in fs::read_dir("src/raw_languages").expect("Unable to read directory") {
         let entry = entry.expect("Unable to read entry");
         let tag = entry.file_name().into_string().expect("Unable to read file name");
         let tag = tag.split(".").collect::<Vec<&str>>()[0];
-        if !profiles.contains_key(&tag) {
-            add_profile_from_path(tag.to_string());
-        }
+        add_profile_from_path(tag.to_string());
     }
 }
 
@@ -152,12 +153,11 @@ mod tests {
     use std::fs;
 
     #[test]
-    fn it_works() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
+    fn generate_all_profiles() {
+        super::generate_all_languages();
+        let profiles = super::get_profiles_from_file();
+        assert_eq!(profiles.len(), 7);
     }
-
-
 
     #[test]
     fn generate_profile() {
@@ -257,4 +257,26 @@ Basic usage:";
         let result = super::detect(doc.to_string());
         assert_eq!(result,"hebrew");
     }
+    #[test]
+    fn detect_japanese(){
+        super::add_profile_from_path("japanese".to_string());
+        let doc = "　だとすれば、野党も我々メディアも、これまでの権力監視の物差しを変える必要があるだろう。手法が強権か否か。敵視の程度はいかばかりか。そうした、安倍、菅義偉の両政権の9年間ですっかり習い性になった「分かりやすい」物差しだけで瞬間反応的に評価しようとすると、「分かりにくい」岸田首相の術中にはまるだけではあるまいか。";
+        let result = super::detect(doc.to_string());
+        assert_eq!(result,"japanese");
+    }
+
+    #[test]
+    fn detect_chinese(){
+        super::add_profile_from_path("chinese".to_string());
+        let doc = "咖啡是世界上最重要的作物之一，不仅因为受到世界上数以亿计的消费者的追捧成为很多人日常必喝的主要饮料，更为重要的是咖啡种植是数百万小规模经营农民们赖以生存的的生计。
+另一方面，由于较富裕国家的消费者们口味和认知的变化，近几十年来富裕国家对牛油果和腰果的消费需求也大幅增加。";
+        assert_eq!(super::detect(doc.to_string()),"chinese");
+    }
+
+    #[test]
+    fn detect_no_language(){
+        let doc = "4325235 23423!!$! 54* 53252%$$@#";
+        assert_eq!(super::detect(doc.to_string()),"No match")
+    }
 }
+
