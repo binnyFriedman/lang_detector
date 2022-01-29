@@ -4,18 +4,13 @@ use std::fs;
 const MAX_DISTANCE: usize = 301;
 
 fn generate_profile(document: String) -> Vec<String> {
-    const MAX_LENGTH: i32 = 100000;
+    const MAX_LENGTH: usize = 100000;
     const N_GRAM_SIZE: usize = 3;
     const MAX_PROFILE_LEN: usize = 300;
 
     let mut profile = HashMap::new();
 
-    let mut word_count: i32 = 0;
-
-    'word_itr: for word in document.split_whitespace() {
-        if word_count == MAX_LENGTH {
-            break 'word_itr;
-        }
+    'word_itr: for word in document.split_whitespace().take(MAX_LENGTH) {
         let mut index: usize = 0;
         let word_length = word.chars().count();
 
@@ -62,7 +57,6 @@ fn generate_profile(document: String) -> Vec<String> {
                 .or_insert(1);
             index += 1;
         }
-        word_count += 1;
     }
 
     //turn the hashmap into a vector of tuples
