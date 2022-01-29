@@ -116,7 +116,7 @@ fn get_min_distances(profile: Vec<String>, profiles: HashMap<String, Vec<String>
 
 
 fn get_profiles_from_file()-> HashMap<String,Vec<String>> {
-    let data = fs::read_to_string("src/lang_profiles.json").expect("Unable to read file");
+    let data = fs::read_to_string("data/lang_profiles.json").expect("Unable to read file");
     let profiles:HashMap<String,Vec<String>> = serde_json::from_str(&data).expect("Unable to parse json");
     profiles
 }
@@ -124,7 +124,7 @@ fn get_profiles_from_file()-> HashMap<String,Vec<String>> {
 fn save_profiles_to_file(profiles: HashMap<String, Vec<String>>) {
     let data = serde_json::to_string(&profiles).expect("Unable to serialize json");
 
-    fs::write("src/lang_profiles.json",data).expect("Unable to write to file");
+    fs::write("data/lang_profiles.json",data).expect("Unable to write to file");
 }
 
 fn add_profile(lange:String,profile:Vec<String>) {
@@ -134,13 +134,13 @@ fn add_profile(lange:String,profile:Vec<String>) {
 }
 
 fn add_profile_from_path(tag:String){
-    let raw_profile = fs::read_to_string(format!("src/raw_languages/{}.txt",tag)).expect("Unable to read file");
+    let raw_profile = fs::read_to_string(format!("data/raw_languages/{}.txt",tag)).expect("Unable to read file");
     let profile = generate_profile(raw_profile);
     add_profile(tag,profile);
 }
 
 fn generate_all_languages() {
-    for entry in fs::read_dir("src/raw_languages").expect("Unable to read directory") {
+    for entry in fs::read_dir("data/raw_languages").expect("Unable to read directory") {
         let entry = entry.expect("Unable to read entry");
         let tag = entry.file_name().into_string().expect("Unable to read file name");
         let tag = tag.split(".").collect::<Vec<&str>>()[0];
@@ -180,7 +180,7 @@ mod tests {
 
     #[test]
     fn add_english_profile(){
-        let english_profile = fs::read_to_string("src/raw_languages/english.txt").expect("Unable to read file");
+        let english_profile = fs::read_to_string("data/raw_languages/english.txt").expect("Unable to read file");
         let english_profile = super::generate_profile(english_profile);
         super::add_profile("english".to_string(),english_profile);
         let profiles = super::get_profiles_from_file();
@@ -190,7 +190,7 @@ mod tests {
 
     #[test]
     fn add_dutch_profile(){
-        let dutch_profile = fs::read_to_string("src/raw_languages/dutch.txt").expect("Unable to read file");
+        let dutch_profile = fs::read_to_string("data/raw_languages/dutch.txt").expect("Unable to read file");
         let dutch_profile = super::generate_profile(dutch_profile);
         let profile_ref = dutch_profile.clone();
         super::add_profile("dutch".to_string(),dutch_profile);
@@ -200,7 +200,7 @@ mod tests {
 
     #[test]
     fn add_spanish_profile(){
-        let spanish = fs::read_to_string("src/raw_languages/spanish.txt").expect("Unable to read file");
+        let spanish = fs::read_to_string("data/raw_languages/spanish.txt").expect("Unable to read file");
         let spanish = super::generate_profile(spanish);
         let profile_ref = spanish.clone();
         super::add_profile("spanish".to_string(),spanish);
