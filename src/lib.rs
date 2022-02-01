@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fs;
 
-const MAX_DISTANCE: usize = 301;
+const MAX_DISTANCE: usize = 1000;
 
 fn generate_profile(document: String) -> Vec<String> {
     const MAX_LENGTH: usize = 100000;
@@ -9,6 +9,10 @@ fn generate_profile(document: String) -> Vec<String> {
     const MAX_PROFILE_LEN: usize = 300;
 
     let mut profile = HashMap::new();
+
+    fn add_to_profile(p:&mut HashMap<String,i32>, word: String) {
+        p.entry(word) .and_modify(|x| *x += 1) .or_insert(1);
+    }
 
     'word_itr: for word in document.split_whitespace().take(MAX_LENGTH) {
         let mut index: usize = 0;
@@ -37,10 +41,7 @@ fn generate_profile(document: String) -> Vec<String> {
                     continue 'word_itr;
                 }
                 if c.is_alphabetic() {
-                    profile
-                        .entry(c.to_string())
-                        .and_modify(|x| *x += 1)
-                        .or_insert(1);
+                   add_to_profile(&mut profile, c.to_string());
                     word_slice.push(c);
                 }
                 from_index += 1;
@@ -51,10 +52,7 @@ fn generate_profile(document: String) -> Vec<String> {
                     word_slice.push(' ');
                 }
             }
-            profile
-                .entry(word_slice.clone())
-                .and_modify(|count| *count += 1)
-                .or_insert(1);
+            add_to_profile(&mut profile,word_slice.clone());
             index += 1;
         }
     }
@@ -76,8 +74,12 @@ fn generate_profile(document: String) -> Vec<String> {
 pub fn detect(doc: String) -> String {
     let profile = generate_profile(doc);
     let profile_length = profile.len();
+    if profile_length == 0 {
+        panic!("No profile generated");
+    }
     let profiles = get_profiles_from_file();
     let profile_distances = get_min_distances(profile, profiles);
+
 
     let mut min_profile = (String::new(), i32::MAX);
     for (profile, distance) in profile_distances {
@@ -86,11 +88,9 @@ pub fn detect(doc: String) -> String {
         }
     }
 
-    //most out of place is no match in any profile
-    let most_out_of_place = MAX_DISTANCE * profile_length;
+    let not_found_count = min_profile.1 / MAX_DISTANCE as i32;
 
-    //lets say that we need to be within 10% of the most out of place
-    if min_profile.1 > (most_out_of_place - most_out_of_place / 10) as i32 {
+    if not_found_count > (profile_length as f64 * 0.8)  as i32 {
         return String::from("No match");
     }
 
@@ -157,7 +157,6 @@ fn generate_all_languages() {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
 
     #[test]
     fn generate_all_profiles() {
@@ -174,49 +173,40 @@ mod tests {
 
         let hebrew_doc = "שלום עולם";
         let profile = super::generate_profile(hebrew_doc.to_string());
-        assert_eq!(profile.len(), hebrew_doc.chars().count());
+        let generated_larger_than_text = profile.len() > hebrew_doc.chars().count();
+        assert!(generated_larger_than_text);
+
     }
 
     #[test]
     fn allow_ending_punctuation() {
         let doc = "my dog.";
         let profile = super::generate_profile(doc.to_string());
-        print!("{:?}", profile);
-        assert_eq!(profile.len(), doc.chars().count() + 1);
+        println!("{:?}", profile);
+        //check that the vector is larger than the text/doc
+        let generated_larger_than_text = profile.len() > doc.chars().count();
+        assert!(generated_larger_than_text);
+        //check that there is not punctuation in the profile
+        let has_punctuation = profile.iter().any(|x| x.chars().any(|c| c == '.'));
+        assert!(!has_punctuation);
     }
 
     #[test]
-    fn add_english_profile() {
-        let english_profile =
-            fs::read_to_string("data/raw_languages/english.txt").expect("Unable to read file");
-        let english_profile = super::generate_profile(english_profile);
-        super::add_profile("english".to_string(), english_profile);
-        let profiles = super::get_profiles_from_file();
-        println!("{:?}", profiles.keys());
-        assert_eq!(profiles.len(), 1);
+    fn dont_allow_empty_strings() {
+        let doc = "";
+        let profile = super::generate_profile(doc.to_string());
+        assert_eq!(profile.len(), 0);
     }
 
-    #[test]
-    fn add_dutch_profile() {
-        let dutch_profile =
-            fs::read_to_string("data/raw_languages/dutch.txt").expect("Unable to read file");
-        let dutch_profile = super::generate_profile(dutch_profile);
-        let profile_ref = dutch_profile.clone();
-        super::add_profile("dutch".to_string(), dutch_profile);
-        let profiles = super::get_profiles_from_file();
-        assert_eq!(profiles.get("dutch"), Some(&profile_ref));
-    }
 
     #[test]
-    fn add_spanish_profile() {
-        let spanish =
-            fs::read_to_string("data/raw_languages/spanish.txt").expect("Unable to read file");
-        let spanish = super::generate_profile(spanish);
-        let profile_ref = spanish.clone();
-        super::add_profile("spanish".to_string(), spanish);
-        let profiles = super::get_profiles_from_file();
-        assert_eq!(profiles.get("spanish"), Some(&profile_ref));
+    fn no_empty_profile_entry() {
+        let doc = " we are the champions 123 er";
+        let profile = super::generate_profile(doc.to_string());
+        println!("{:?}", profile);
     }
+
+
 
     #[test]
     fn detect_english() {
@@ -284,8 +274,18 @@ Basic usage:";
     }
 
     #[test]
+    #[should_panic]
     fn detect_no_language() {
         let doc = "4325235 23423!!$! 54* 53252%$$@#";
+
         assert_eq!(super::detect(doc.to_string()), "No match")
+    }
+
+    #[test]
+    fn detect_unknown(){
+        let doc = "है जो जरुरत के हिसाब से Record बढ़ने के साथ आगे नए Block के जरिये जुड़ जाता है और यह क्रम आगे बढ़ती ही जाती है, जो Cryptography तकनीक के उपयोग से एक साथ आपस में जुड़े हुए रहते हैं इनमें उपस्थित हर एक ब्लॉक में अपने पिछले Block का एक Cryptographic #Hash होता है जो हर एक Blocks को अलग और Unique बनाता है इस #Hash Protocol के कार्यप्रणाली को बदला नहीं जा सकता है इसी वजह से Blockchain लाखों के Chains में होने के बावजूद भी Data में कोई गलती या बदलाव की कोई गुंजाईश नहीं होती है। अगर किसी Cryptocurrency के Admin या Head Miners किसी Data को बदलना चाहते हैं तो इस Condition में उसे हर एक Blocks से Users के Data को Edit करना होगा चूँकि आप अच्छे से जानते हैं कि सभी Block एक साथ जुड़े होते हैं इसलिए हर एक Blocks में Data को बदलना लगभग नामुमकिन है अगर आप ऐसे करते हैं तो आपको #Hash Protocol को बदलना होगा जो इस तकनीक का सबसे मुश्किल काम है अगर आपने Block बनाते समय एक बार जो #Hash को जो नाम Define कर दिया फिर उसे बदलना संभव नहीं है इसीलिए Blockchain की तकनीक को Users Data के लिए सबसे ज्यादा सुरक्षित कहा जाता है।";
+        //notice there are some english words in this
+        let detection = super::detect(doc.to_string());
+        assert_eq!(detection,"No match")
     }
 }
